@@ -6,6 +6,7 @@ import {
 } from "../../utils.js";
 
 const SERVER_URL = API_URL + "/mealPlanGenerator";
+let myJsonObject; // Declare myJsonObject at a higher scope
 
 export async function initMealPlanGenerator() {
   document
@@ -30,12 +31,10 @@ export async function initMealPlanGenerator() {
 
       // meal checklist
       const mealChecklistDiv = document.getElementById("mealChecklistDiv");
-      // itererer igennem checkboxene og lægger dem til selectedMeals hvis de er checked
-
-      var checkboxesList = mealChecklistDiv.querySelectorAll(
+      let mealChecklist = [];
+      const checkboxesList = mealChecklistDiv.querySelectorAll(
         'input[type="checkbox"]'
       );
-      let mealChecklist = [];
       checkboxesList.forEach((mealType) => {
         if (mealType.checked) {
           mealChecklist.push(mealType.value);
@@ -52,7 +51,6 @@ export async function initMealPlanGenerator() {
         preferences,
       };
 
-      //
       const response = await fetch(
         SERVER_URL,
         makeOptions("POST", fullUserInput, true)
@@ -62,15 +60,16 @@ export async function initMealPlanGenerator() {
         const responseData = await response.json();
 
         var jsonString = responseData.answer;
-        var myJsonObject = JSON.parse(jsonString);
+        myJsonObject = JSON.parse(jsonString);
         document.getElementById("jsonTable").innerHTML =
-        createTable(myJsonObject);
+          createTable(myJsonObject);
 
         if (myJsonObject.hasOwnProperty('Breakfast')) {
-          console.log(myJsonObject['Breakfast']); // Logs the 'Breakfast' object
-      }    
+          console.log(myJsonObject['Breakfast']);
+        }
 
-        //alert("Answer from OpenAI received");
+        // Add the "Save Recipe" buttons after creating the table
+        addSaveRecipeButtons();
 
         document.getElementById("wait-button").style.display = "none";
         document.getElementById("submit-button").style.display = "block";
@@ -80,14 +79,12 @@ export async function initMealPlanGenerator() {
         document.getElementById("submit-button").style.display = "block";
         const errorData = await response.json();
 
-        document.getElementById("result").innerText =
-        "* ERROR *";
+        document.getElementById("result").innerText = "* ERROR *";
 
         throw new Error(errorData.message);
       }
-
-      
     });
+
   function addPreference(event) {
     if (event.target.value.length === 1) {
       const inputContainer = document.getElementById("input-container");
@@ -99,51 +96,77 @@ export async function initMealPlanGenerator() {
     }
   }
 
-  
   function createTable(JSONObject) {
     var tables = ""; // Variable to store all tables
-  
+
     for (var key in JSONObject) {
       if (JSONObject.hasOwnProperty(key)) {
         var value = JSONObject[key];
-  
+
         // Create a new table for each recipe
         var table = "<table border='1'>";
         table += "<tr><td colspan='2'><b>" + key + "</b></td></tr>";
-  
+
         if (Array.isArray(value)) {
           // Handle array elements by concatenating them into a single cell
-          table += "<tr><td colspan='2'>" + value.join(', ') + "</td></tr>";
+          table +=
+            "<tr><td colspan='2'>" + value.join(', ') + "</td></tr>";
         } else if (typeof value === "object" && value !== null) {
           // Create rows for each detail within the same table
           for (var detailKey in value) {
             if (value.hasOwnProperty(detailKey)) {
               var detailValue = value[detailKey];
-              table += "<tr><td>" + detailKey + "</td><td>" + detailValue + "</td></tr>";
+              table +=
+                "<tr><td>" + detailKey + "</td><td>" + detailValue + "</td></tr>";
             }
           }
         } else {
           // Handle normal elements
           table += "<tr><td colspan='2'>" + value + "</td></tr>";
         }
-  
+
         table += "</table>";
-  
+
         tables += table;
       }
     }
-  
+
     return tables;
   }
-  
-  
-  
-  
-  
-  
 
+  function addSaveRecipeButtons() {
+    // Add the "Save Recipe" button to each recipe
+    const recipeTables = document.querySelectorAll("#jsonTable table");
+    recipeTables.forEach((table) => {
+      const mealType = table.querySelector("td b").textContent;
+      const saveButton = document.createElement("button");
+      saveButton.textContent = "Save Recipe";
+      saveButton.setAttribute("data-meal-type", mealType);
+      saveButton.addEventListener("click", saveRecipe);
+      table.querySelector("td").appendChild(saveButton);
+    });
+  }
+}
 
-  document
-    .getElementById("preference-input")
-    .addEventListener("input", addPreference);
+// Move saveRecipe outside of initMealPlanGenerator
+function saveRecipe(event) {
+  const mealType = event.target.getAttribute("data-meal-type");
+  const recipeData = myJsonObject[mealType];
+  const saveRecipeURL = API_URL + "/meals/save"; // Replace with your actual API URL
+
+  fetch(saveRecipeURL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(recipeData),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      alert("Recipe saved successfully!");
+    })
+    .catch((error) => {
+      console.error("Error saving recipe:", error);
+      alert("Failed to save recipe. Please try again.");
+    });
 }
